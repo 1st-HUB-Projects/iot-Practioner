@@ -1,10 +1,6 @@
 {
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu", 
-  "features": {
-    "ghcr.io/devcontainers/features/aws-cli:2": {},
-    "ghcr.io/devcontainers/features/common-utils:2": {
-      "installIpUtils": true,
-      "packages": "telnet net-tools lsof"
-    }
+  "name": "My Alpine-based Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile"
   }
 }
