@@ -1,10 +1,7 @@
 {
   "image": "mcr.microsoft.com/devcontainers/universal:2",
   "features": {
-    // Install AWS CLI (v2 by default)
     "ghcr.io/devcontainers/features/aws-cli:2": {},
-
-    // Install common-utils with extra packages
     "ghcr.io/devcontainers/features/common-utils:2": {
       "installIpUtils": true,
       "packages": "telnet net-tools lsof"
