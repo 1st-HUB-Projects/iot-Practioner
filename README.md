@@ -1,256 +1,203 @@
-Markdown
-# AWS IoT Core Device Simulator
 
-This project simulates an IoT device that connects to AWS IoT Core and publishes random sensor data (temperature and pressure) to the `iot/sub` topic every 2 seconds.
+```markdown
+# AWS IoT Projects Overview
 
-## Overview
+This repository showcases several Node.js  & Pyhton projects that demonstrate how to:
 
-The script uses the `aws-iot-device-sdk` for Node.js to establish a secure MQTT connection with AWS IoT Core. It then generates simulated sensor data and publishes it in JSON format.
+1. **Manage device certificates** related to an AWS IoT Core device (stored in the `.certs/` folder).  
+2. **Send a single MQTT message** to AWS IoT Core.  
+3. **Send multiple MQTT messages** in JSON format:
+   ```json
+   {
+     "device_id": "device_1",
+     "sensor_type": "Temperature",
+     "location": "Warehouse_2",
+     "value": 42.5
+   }
+   ```
+4. **Base64-encode certificates** and store them in AWS Secrets Manager.  
+5. **Use certificates** (retrieved from AWS Secrets Manager) to send multiple MQTT messages to AWS IoT Core.
 
-## Prerequisites
+Below is a high-level summary of the projects and how they fit together.
 
-1.  **AWS Account:** You need an active AWS account.
-2.  **AWS IoT Core Setup:**
-    *   Create a **Thing** in AWS IoT Core.
-    *   Generate a **certificate** and **private key** for your Thing.
-    *   Download the **Amazon Root CA 1** certificate.
-    *   Create a **policy** that allows your Thing to connect, publish, subscribe, and receive (adjust permissions as needed).
-    *   Attach the policy to the certificate, and attach the certificate to the Thing.
-3.  **Node.js and npm:** Make sure you have Node.js and npm installed on your system or in your AWS Codespaces environment. You can check by running:
+---
 
-    ```bash
-    node -v
-    npm -v
-    ```
-4.  **AWS CLI:** Install and configure the AWS CLI. This is optional for running the script but helpful for managing AWS resources.
-5.  **Install the AWS IoT Device SDK:**
+## 1. Certificates in `.certs/`
 
-    ```bash
-    npm install aws-iot-device-sdk
-    ```
+- The folder `.certs/` contains PEM files for your AWS IoT device:
+  - **device-private.pem.key**  
+  - **device-certificate.pem.crt**  
+  - **AmazonRootCA1.pem**  
+- These certificates and keys allow secure TLS connections to **AWS IoT Core**.  
+- Typically, you configure an IoT Thing in the [AWS IoT Console](https://console.aws.amazon.com/iot/home) and download these credentials into your `.certs/` folder.
+
+---
+
+## 2. Sending a Single Message to AWS IoT Core
+
+One of the examples demonstrates how to send a **single JSON message** via MQTT to an AWS IoT topic. It covers:
+
+1. **Loading** the `.pem` certificates from `.certs/`.  
+2. **Using** the [aws-iot-device-sdk](https://www.npmjs.com/package/aws-iot-device-sdk) in Node.js.  
+3. **Connecting** to your IoT endpoint (e.g., `xxxxxxxx-ats.iot.us-east-1.amazonaws.com`).  
+4. **Publishing** a message (e.g., `{"hello": "iot"}`) to a topic like `my/test/topic`.
+
+---
+
+## 3. Sending Multiple JSON Messages
+
+Another example expands on this by **repeatedly publishing** messages with the following payload structure:
+
+```js
+{
+  device_id: deviceId,
+  sensor_type: sensorType,
+  location: `Warehouse_${generateRandom(1, 3)}`,
+  value: value
+}
+```
+
+- **device_id**: A unique device identifier (e.g., `device_3`).  
+- **sensor_type**: Fixed per device (e.g., “Pressure” or “Temperature”).  
+- **location**: Randomly selected from `Warehouse_1`, `Warehouse_2`, or `Warehouse_3`.  
+- **value**: A random reading (e.g., temperature in Celsius or pressure in Bar).
+
+This project uses a **timer** (e.g., an interval every 4 seconds) to publish multiple sensor readings to a topic (e.g., `iot/sub`) on AWS IoT Core.
+
+---
+
+## 4. Base64-Encoding Certificates & Storing in AWS Secrets Manager
+
+We show how to:
+
+1. **Convert** each PEM file (`.key`, `.crt`, `AmazonRootCA1.pem`) into **base64**:
+   ```bash
+   base64 device-private.pem.key > device-private.txt
+   base64 device-certificate.pem.crt > device-certificate.txt
+   base64 AmazonRootCA1.pem > AmazonRootCA1.txt
+   ```
+2. **Create a JSON** file containing all three base64-encoded strings:
+   ```json
+   {
+     "PrivateKey": "<base64-of-device-private-key>",
+     "Cert": "<base64-of-device-certificate>",
+     "AmazonRootCA": "<base64-of-root-ca>"
+   }
+   ```
+3. **Store** that JSON in AWS Secrets Manager under a secret name like `iot/cert/prod`.
+
+---
+
+## 5. Using Certificates from Secrets Manager to Send Multiple MQTT Messages
+
+Finally, we demonstrate **retrieving** certificates from Secrets Manager and using them **in-memory** (rather than from local files). The steps include:
+
+1. **Calling** `GetSecretValue` via the [AWS SDK for JavaScript v3](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/).  
+2. **Decoding** the base64 strings to raw PEM content.  
+3. **Connecting** to AWS IoT using the in-memory PEM data (e.g., `privateKey`, `clientCert`, `caCert`) rather than file paths.  
+4. **Publishing** the same sensor messages to the IoT topic (like `iot/sub`).
+
+By centralizing certificates in Secrets Manager, you can manage **rotation**, **access control**, and **audit logs** more effectively.
+
+---
 
 ## Project Structure
 
-Iot-Practitioner/
-├── .certs/
-│   ├── iOTest_PrivateKey.pem    # Your device's private key
-│   ├── iOTest_Cert.pem         # Your device's certificate
-│   └── AmazonRootCA.pem     # The Amazon Root CA 1 certificate
-├── virtualiOT_js/
-└── singleMqttMsg.js         # NodeJs program that sends an Mqtt Message to aws IoT Core
-
-
-*   **`.certs/`:** This directory stores your device's private key, certificate, and the Amazon Root CA certificate. **Important:** Keep this directory secure and do not commit your private key to version control (add `.certs/` to your `.gitignore` file). The leading dot in the folder name makes it a hidden folder; you can make it appear by pressing CTRL + H.
-*   **`Check File Permissions`:** This is the main Node.js script that simulates the IoT device.
-ls -l: Use ls -l to examine the file permissions of your private key, certificate, and CA certificate within the Codespaces environment:
-
- ```bash
-ls -l ../.certs
 ```
-* Permissions:
-
-iOTest_PrivateKey.pem: Should have read and write permissions for the owner (e.g., -rw------- or -rw-r--r--).
-iOTest_Cert.pem: Should have at least read permissions for the owner (e.g., -r--r--r-- or -rw-r--r--).
-AmazonRootCA.pem: Should have at least read permissions for the owner.
-chmod (if needed):
-
-```bash
-chmod 600 ../.certs/iOTest_PrivateKey.pem  # Secure the private key
-chmod 644 ../.certs/iOTest_Cert.pem
-chmod 644 ../.certs/AmazonRootCA.pem
+├─ .certs/
+│   ├─ device-private.pem.key
+│   ├─ device-certificate.pem.crt
+│   └─ AmazonRootCA1.pem
+├─ single-message/
+│   └─ index.js                 # Example sending a single message
+├─ multi-message/
+│   └─ index.js                 # Example sending multiple messages w/ random data
+├─ secrets-base64/
+│   ├─ encode.sh                # Script to base64-encode .pem files
+│   └─ push_to_aws.js          # Example storing base64 certs in Secrets Manager
+└─ secrets-multi-message/
+    └─ index.js                 # Example retrieving from Secrets Manager & publishing
 ```
-*   **`virtualiOT_js/singleMQTTMsg.js`:** This is the main Node.js script that simulates the IoT device.
 
-## Configuration
+> **Note**: The above layout is illustrative. Actual file names and paths may vary.
 
-1.  **Certificates:**
-    *   Place your downloaded private key (`iOTest_PrivateKey.pem`), certificate (`iOTest_Cert.pem`), and the Amazon Root CA 1 certificate (`AmazonRootCA.pem`) into the `.certs/` directory.
-2.  **Environment Variables:**
-    * This project uses environment variables to manage sensitive information like your AWS IoT endpoint and region. This is a security best practice to avoid hardcoding these values directly in your code.
+---
 
-    * **`IOT_END_POINT`:**  Your AWS IoT Core endpoint. You can find this in the AWS IoT Core console under Settings.
-    * **`AWS_DEFAULT_REGION`:** The AWS region where your IoT Core resources are located (e.g., `us-east-1`).
+## Prerequisites
 
-    ### Setting Environment Variables
+- **Node.js** (14+).  
+- **AWS CLI** (configured, or AWS credentials set as environment variables).  
+- An AWS IoT **Thing**, **certificate**, and **policy** in your AWS account.  
+- (Optional) **Secrets Manager** permissions if you’re storing credentials there.
 
-    The method for setting environment variables depends on your operating system and whether you want to set them temporarily (for the current session) or permanently.
+---
 
-    #### **Linux/macOS**
+## 6. Implementation in GitHub Codespaces
 
-    **1. Temporary (Current Terminal Session):**
+This repository also includes a sample `.devcontainer/devcontainer.json` for working in GitHub Codespaces. It installs:
+- **AWS CLI**  
+- **Docker in Docker**  
+- **Common utilities** (telnet, ping, etc.)  
+- **Python, Node.js** if needed
 
-    ```bash
-    export IOT_END_POINT="your_iot_endpoint"
-    export AWS_DEFAULT_REGION="your_aws_region"
-    ```
+### Steps to Run in Codespaces
 
-    *   Replace `your_iot_endpoint` with your actual IoT endpoint and `your_aws_region` with your AWS region.
+1. **Open** this repo in GitHub and click **“Code → Create Codespace on main”** (or your chosen branch).  
+2. Wait for the Codespace environment to build. If you see a `.devcontainer` folder, Codespaces will automatically use it to install the required packages and tools.  
+3. Once the container is up, open a **terminal** within Codespaces.  
+4. Navigate to the relevant project folder (e.g., `multi-message/`).  
+5. Install dependencies:
+   ```bash
+   npm install
+   ```
+6. **Export** your environment variables, like:
+   ```bash
+   export AWS_REGION=us-east-1
+   export IOT_END_POINT="xxxxxxxx-ats.iot.us-east-1.amazonaws.com"
+   ```
+7. **Run**:
+   ```bash
+   node index.js
+   ```
+   You should see logs indicating successful connection to AWS IoT and repeated published messages.
 
-    **2. Permanent (System-wide):**
+> **Tip**: If you want to retrieve certificates from Secrets Manager, ensure your IAM role or environment variables allow `secretsmanager:GetSecretValue`. Then run the relevant script (e.g., `secrets-multi-message/index.js`).
 
-    *   **Edit your shell's configuration file:**
-        *   **Bash:**  Edit `~/.bashrc`, `~/.bash_profile`, or `~/.profile`.
-        *   **Zsh:** Edit `~/.zshrc`.
-    *   **Add the following lines:**
+---
 
-    ```bash
-    export IOT_END_POINT="your_iot_endpoint"
-    export AWS_DEFAULT_REGION="your_aws_region"
-    ```
+## Setup & Usage
 
-    *   **Save the file and then either:**
-        *   Source the configuration file: `source ~/.bashrc` (or the appropriate file for your shell)
-        *   Or, open a new terminal window for the changes to take effect.
+1. **Clone** this repository or open it in GitHub Codespaces:
+   ```bash
+   git clone https://github.com/your-account/your-repo.git
+   cd your-repo
+   ```
+2. **Install dependencies** (in each project folder):
+   ```bash
+   cd single-message
+   npm install
+   ```
+3. **Configure** your AWS Region & IoT endpoint. For example:
+   ```bash
+   export AWS_REGION=us-east-1
+   export IOT_END_POINT="xxxxxxxx-ats.iot.us-east-1.amazonaws.com"
+   ```
+4. **Run** the single-message example:
+   ```bash
+   node index.js
+   ```
+   Or the multi-message example:
+   ```bash
+   cd ../multi-message
+   node index.js
+   ```
+5. **Base64 encode** your `.pem` files and store them in Secrets Manager (see `secrets-base64/`), then run the script that retrieves them and sends messages (in `secrets-multi-message/`).
 
-    #### **Windows**
+---
 
-    **1. Temporary (Current Command Prompt):**
+## Conclusion
 
-    ```batch
-    set IOT_END_POINT=your_iot_endpoint
-    set AWS_DEFAULT_REGION=your_aws_region
-    ```
-
-    **2. Permanent (System-wide):**
-
-    *   **Through System Properties:**
-        1.  Search for "environment variables" in the Windows search bar.
-        2.  Select "Edit the system environment variables."
-        3.  Click the "Environment Variables..." button.
-        4.  Under "System variables," click "New...".
-        5.  Enter `IOT_END_POINT` for the "Variable name" and your IoT endpoint for the "Variable value".
-        6.  Repeat steps 4-5 for `AWS_DEFAULT_REGION`.
-        7.  Click "OK" on all open windows to save the changes.
-    *   **Through PowerShell:**
-
-    ```powershell
-    [System.Environment]::SetEnvironmentVariable('IOT_END_POINT', 'your_iot_endpoint', 'Machine')
-    [System.Environment]::SetEnvironmentVariable('AWS_DEFAULT_REGION', 'your_aws_region', 'Machine')
-    ```
-
-    #### **AWS Codespaces**
-
-    *   **Through the .devcontainer.json file:** The recommended method for Codespaces is to define the environment variables within the `.devcontainer/devcontainer.json` file.
-
-        ```json
-        {
-            // ... other devcontainer.json settings
-
-            "remoteEnv": {
-                "IOT_END_POINT": "your_iot_endpoint",
-                "AWS_DEFAULT_REGION": "your_aws_region"
-            }
-        }
-        ```
-
-    *  **Through the Codespaces Secrets (Recommended for sensitive values like IOT_END_POINT):**
-
-        1.  In your repository or organization settings on GitHub, go to "Codespaces" -> "Secrets".
-        2.  Add a new secret named `IOT_END_POINT` with your endpoint as the value.
-        3.  Add another secret named `AWS_DEFAULT_REGION` with your region as the value.
-        4.  In your `.devcontainer/devcontainer.json`, add a reference to the secrets:
-
-            ```json
-            {
-                // ... other devcontainer.json settings
-
-                "remoteEnv": {
-                    "IOT_END_POINT": "${localEnv:IOT_END_POINT}",
-                    "AWS_DEFAULT_REGION": "${localEnv:AWS_DEFAULT_REGION}"
-                }
-            }
-            ```
-
-        5.  Rebuild your Codespaces container for the changes to take effect.
-
-    #### **Verifying Environment Variables**
-
-    After setting the environment variables, you can verify them by using the following commands or code:
-
-    *   **Linux/macOS:**
-
-        ```bash
-        echo $IOT_END_POINT
-        echo $AWS_DEFAULT_REGION
-        ```
-
-    *   **Windows (Command Prompt):**
-
-        ```batch
-        echo %IOT_END_POINT%
-        echo %AWS_DEFAULT_REGION%
-        ```
-
-    *   **Windows (PowerShell):**
-
-        ```powershell
-        $env:IOT_END_POINT
-        $env:AWS_DEFAULT_REGION
-        ```
-    *   **Node.js:**
-
-        ```javascript
-        console.log(process.env.IOT_END_POINT);
-        console.log(process.env.AWS_DEFAULT_REGION);
-        ```
-
-3.  **Update `singleMQTTMsg.js`:**
-    *   **`clientId`:** Make sure `"iOTestID"` is unique or matches your Thing name in AWS IoT Core.
-
-## Running the Simulator
-
-1.  Navigate to the project directory in your terminal:
-
-    ```bash
-    cd Iot-Practitioner/virtualiOT_js/
-    ```
-
-2.  Run the script:
-
-    ```bash
-    node singleMQTTMsg.js
-    ```
-
-## Output
-
-You should see output similar to this in your console:
-
-Connected to AWS IoT Core
-Message sent: {"temperature":"25.43","pressure":"987.65","device_id":"device_3"}
-Message sent: {"temperature":"22.12","pressure":"1012.55","device_id":"device_1"}
-Message sent: {"temperature":"28.90","pressure":"945.21","device_id":"device_5"}
-...
+This repo illustrates various AWS IoT Core scenarios, from **basic** single-message publishing to **storing certificates** securely in **AWS Secrets Manager** and **sending repeated sensor data**. By leveraging GitHub Codespaces, you can develop and test these IoT features quickly without worrying about local environment setup.  
 
 
-You can also monitor the messages in the AWS IoT Core console:
-
-1.  Go to the AWS IoT Core console.
-2.  Click on **"MQTT test client"**.
-3.  Subscribe to the topic `iot/sub`.
-
-## Important Security Notes
-
-*   **Never commit your private key to a public repository.** Add the `.certs/` directory to your `.gitignore` file.
-*   **Restrict Permissions:** Follow the principle of least privilege when creating your AWS IoT Core policy. Grant only the necessary permissions to your Thing.
-*   **Certificate Security:** Store your certificates securely and limit access to them. Consider using a secrets management service like AWS Secrets Manager for production environments.
-
-## Troubleshooting
-
-*   **`Error: Invalid "keyPath" option supplied.`:** This usually means the path to your private key file is incorrect or the file doesn't exist. Double-check the path and file name in `singleMQTTMsg.js`. Also, ensure that you are using the `key` option (not `keyPath`) when passing the certificate content directly as a Buffer or string.
-*   **`Error: Invalid "certPath" option supplied.`:** Similar to the above, but for the certificate file. Make sure you are using the `cert` option (not `certPath`).
-*   **`Error: Invalid "caPath" option supplied.`:**  Make sure you are using the correct **Amazon Root CA 1** certificate, and the path is correct or you are passing the content directly with the `ca` option.
-*   **`Error: Connect error: Not authorized`:** This indicates that the policy attached to your Thing's certificate does not allow the necessary actions (e.g., `iot:Connect`, `iot:Publish`). Review your policy in AWS IoT Core.
-*   **No output:** If you don't see any output, check the following:
-    *   Is your device successfully connecting to AWS IoT Core? Look for the "Connected to AWS IoT Core" message.
-    *   Is your device publishing to the correct topic (`iot/sub`)?
-    *   Are you subscribed to the correct topic in the MQTT test client?
-
-## Further Development
-
-*   **Retrieve Certificates from Secrets Manager:** Modify the script to retrieve certificates from AWS Secrets Manager for enhanced security.
-*   **Multiple Devices:** Simulate multiple devices with different IDs and sensor types.
-*   **More Realistic Data:** Generate more realistic sensor data patterns instead of purely random values.
-*   **Error Handling:** Implement more robust error handling and logging.
-*   **Command Line Arguments:** Use command-line arguments or environment variables to configure the script instead of hardcoding values.
-
-This README provides a comprehensive guide to understanding, configuring, and running the provided IoT device simulator script. Remember to prioritize security best practices when working with AWS IoT Core and certificates.
+```
