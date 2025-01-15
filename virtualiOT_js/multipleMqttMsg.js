@@ -18,11 +18,13 @@ function generateRandom(min, max) {
 
 // Function to generate the sensor value based on the sensor type
 function generateSensorValue(sensorType) {
+    let value;
     if (sensorType === "Temperature") {
-        return (Math.random() * 110 - 10).toFixed(2); // Random temperature value between -10 and 100
+        value = Math.random() * 110 - 10;
     } else {
-        return (Math.random() * 100 + 1).toFixed(2);  // Random pressure value between 1 and 100 Bar
+        value = Math.random() * 100 + 1;
     }
+    return parseFloat(value.toFixed(2)); // Convert to float after toFixed
 }
 
 device.on('connect', () => {
