@@ -5,13 +5,15 @@
 - Publish the payload to a topic.
  ***********************************/
 
-const {
-    SecretsManagerClient,
-    GetSecretValueCommand
-  } = require('@aws-sdk/client-secrets-manager');
-  const iot = require('aws-iot-device-sdk');
-  const { Buffer } = require('buffer');
-  
+// const {
+//     SecretsManagerClient,
+//     GetSecretValueCommand
+//   } = require('@aws-sdk/client-secrets-manager');
+//   const iot = require('aws-iot-device-sdk');
+//   const { Buffer } = require('buffer');
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import * as iot from 'aws-iot-device-sdk';
+import { Buffer } from 'buffer';
   /*********************************************************
    * ENVIRONMENT VARIABLES
    * Make sure these are set in your environment, or change 
@@ -33,14 +35,14 @@ const {
   
   // Function to generate the sensor value based on the sensor type
   function generateSensorValue(sensorType) {
+    let value;
     if (sensorType === "Temperature") {
-      // Random temperature value between -10 and 100
-      return (Math.random() * 110 - 10).toFixed(2);
+        value = Math.random() * 110 - 10;
     } else {
-      // Random pressure value between 1 and 100 Bar
-      return (Math.random() * 100 + 1).toFixed(2);
+        value = Math.random() * 100 + 1;
     }
-  }
+    return parseFloat(value.toFixed(2)); // Convert to float after toFixed
+}
   
   /*********************************************************
    * MAIN FUNCTION
@@ -58,7 +60,7 @@ const {
   
       let secretString= response.SecretString;
   
-      // Expecting a JSON structure like:
+      // Get secret Values & Expecting a JSON structure :
       // { "PrivateKey": "<base64>", "Cert": "<base64>", "AmazonRootCA": "<base64>" }
       const secretObj = JSON.parse(secretString);
   
